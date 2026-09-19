@@ -225,3 +225,20 @@ button.next.sticky {
 .suggestion .amount { font-size: 1.05rem; }
 .suggestion .free-item .amount { font-weight: 500; color: var(--muted); font-size: 0.9rem; }
 .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--c); flex: 0 0 auto; }
+
+.segmented {
+  display: flex; gap: 4px; padding: 4px; margin-bottom: 10px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+}
+.segmented button {
+  flex: 1; border: 0; background: none; border-radius: 9px; padding: 8px; font-weight: 600; color: var(--muted);
+}
+.segmented button.active { background: var(--accent-soft); color: var(--accent); }
+
+.day-head { align-items: center; margin-bottom: 2px; }
+.meal-title { display: flex; align-items: baseline; gap: 6px; color: var(--text); text-decoration: none; font-size: 1rem; }
+.meal-title h3 { text-decoration: underline; text-decoration-color: var(--border); text-underline-offset: 3px; }
+.swap {
+  width: 36px; height: 36px; border-radius: 50%; border: 1px solid var(--border); background: var(--bg); font-size: 1rem;
+}
+.day-summary { margin: 0; }

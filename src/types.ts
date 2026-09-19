@@ -2,6 +2,9 @@ export type GroupId = 'kruh' | 'voce' | 'povrce' | 'mlijeko' | 'masnoce' | 'meso
 
 export type Units = Partial<Record<GroupId, number>>
 
+/** Kada se namirnica jede: uz jutarnje/hladne obroke, uz kuhane obroke ili bilo kada. */
+export type When = 'jutro' | 'topli' | 'oba'
+
 export interface Food {
   id: string
   name: string
@@ -23,6 +26,8 @@ export interface Food {
   /** Povrće koje se ne uračunava u dnevni unos (do 100 g po obroku). */
   free?: boolean
   note?: string
+  /** Samo za vlastite namirnice; ugrađene imaju profil u lib/pairing.ts. */
+  when?: When
   custom?: boolean
 }
 
@@ -31,5 +36,10 @@ export type MealId = 'zajutrak' | 'dorucak' | 'rucak' | 'uzina' | 'vecera' | 'no
 export interface Plan {
   kcal: number
   kj: number
-  meals: Record<MealId, Units>
+  mealsPerDay: 6 | 3
+  /** Odakle su jedinice po obroku prepisane. */
+  source: string
+  /** Napomene uz pojedine obroke (npr. juha uz ručak). */
+  notes?: Partial<Record<MealId, string>>
+  meals: Partial<Record<MealId, Units>>
 }

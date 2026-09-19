@@ -2,7 +2,7 @@ import { useState } from 'react'
 import type { FormEvent } from 'react'
 import { GROUPS, GROUP_BY_ID } from '../data/groups'
 import { formatNumber } from '../lib/meal'
-import type { Food, GroupId } from '../types'
+import type { Food, GroupId, When } from '../types'
 
 interface Props {
   initial: Food | null
@@ -25,6 +25,7 @@ export default function FoodForm({ initial, existingNames, onSave, onCancel }: P
   const [grams, setGrams] = useState(initial ? String(initial.grams) : '')
   const [state, setState] = useState(initial?.state ?? '')
   const [note, setNote] = useState(initial?.note ?? '')
+  const [when, setWhen] = useState<When>(initial?.when ?? 'oba')
   const [per100, setPer100] = useState('')
 
   const info = GROUP_BY_ID[group]
@@ -45,6 +46,7 @@ export default function FoodForm({ initial, existingNames, onSave, onCancel }: P
       state: state.trim() || undefined,
       sub: SUBGROUPS[group]?.includes(sub) ? sub : undefined,
       note: note.trim() || undefined,
+      when,
       custom: true,
     })
   }
@@ -105,6 +107,15 @@ export default function FoodForm({ initial, existingNames, onSave, onCancel }: P
           </select>
         </label>
       </div>
+
+      <label>
+        Kada se jede
+        <select value={when} onChange={(e) => setWhen(e.target.value as When)}>
+          <option value="oba">Bilo kada</option>
+          <option value="jutro">Doručak, užina (hladni obroci)</option>
+          <option value="topli">Ručak, večera (kuhani obroci)</option>
+        </select>
+      </label>
 
       <label>
         Napomena

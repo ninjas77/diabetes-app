@@ -131,7 +131,7 @@ export default function FoodsView({ foods, pantry, onToggle, onClearPantry, onSa
       </details>
 
       {pantry.size > 0 && (
-        <button className="primary next sticky" onClick={onNext}>Složi obrok ({pantry.size} {namirnica(pantry.size)}) →</button>
+        <button className="primary next sticky" onClick={onNext}>Dalje ({pantry.size} {namirnica(pantry.size)}) →</button>
       )}
 
       <details className="card info warn">

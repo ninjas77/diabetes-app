@@ -1,8 +1,13 @@
 import { useMemo, useState } from 'react'
 import type { CSSProperties } from 'react'
 import { GROUP_BY_ID, MEAL_GROUP_ORDER } from '../data/groups'
-import { MEALS } from '../data/plans'
-import { autoFill, compare, formatAmount, formatNumber, roundHalf, suggestionOrder, totals } from '../lib/meal'
+import { planMeals, targetsFor } from '../data/plans'
+import DayView from './DayView'
+import ModePicker from './ModePicker'
+import type { Mode } from './ModePicker'
+import SuggestionCard from './SuggestionCard'
+import { autoFill, compare, formatAmount, formatNumber, roundHalf, totals } from '../lib/meal'
+import { MEAL_CONTEXT, freeVegFor, suggestions } from '../lib/pairing'
 import type { Allocation } from '../lib/meal'
 import type { Food, GroupId, MealId, Plan, Units } from '../types'
 
@@ -10,50 +15,61 @@ interface Props {
   plan: Plan
   foods: Food[]
   pantry: Set<string>
+  mode: Mode
+  meal: MealId
+  onMode: (mode: Mode) => void
+  onMeal: (meal: MealId) => void
   onGoToFoods: () => void
 }
 
-function currentMeal(): MealId {
-  const h = new Date().getHours()
-  if (h < 9) return 'zajutrak'
-  if (h < 12) return 'dorucak'
-  if (h < 15) return 'rucak'
-  if (h < 17) return 'uzina'
-  if (h < 20) return 'vecera'
-  return 'nocni'
-}
-
-export default function MealView({ plan, foods, pantry, onGoToFoods }: Props) {
-  const [meal, setMeal] = useState<MealId>(currentMeal)
+export default function MealView({ plan, foods, pantry, mode, meal: selectedMeal, onMode, onMeal, onGoToFoods }: Props) {
   const [seed, setSeed] = useState(0)
-  const targets = plan.meals[meal]
-  const mealInfo = MEALS.find((m) => m.id === meal)!
+  // Obrok otvoren iz dnevnog jelovnika zadržava namirnice koje su tamo predložene.
+  const [preset, setPreset] = useState<Food[] | undefined>()
+  const atHome = useMemo(() => foods.filter((f) => pantry.has(f.id)), [foods, pantry])
+  // Plan s 3 obroka nema npr. užinu – tada se prikazuje prvi obrok plana.
+  const meal = plan.meals[selectedMeal] ? selectedMeal : planMeals(plan)[0].id
+  const targets = targetsFor(plan, meal)
   const pantryKey = [...pantry].sort().join(',')
+
+  const chooseMeal = (m: MealId) => {
+    onMeal(m)
+    setSeed(0)
+    setPreset(undefined)
+  }
 
   return (
     <section>
-      <div className="meal-tabs" role="tablist">
-        {MEALS.map((m) => (
-          <button key={m.id} role="tab" aria-selected={m.id === meal} className={m.id === meal ? 'active' : ''} onClick={() => setMeal(m.id)}>
-            <strong>{m.name}</strong>
-            <small>{m.time}</small>
-          </button>
-        ))}
-      </div>
+      <ModePicker plan={plan} mode={mode} meal={meal} onMode={onMode} onMeal={chooseMeal} />
 
       {pantry.size === 0 ? (
         <div className="empty">
           <p>Još niste označili što imate kod kuće.</p>
           <button className="primary" onClick={onGoToFoods}>Označi namirnice</button>
         </div>
+      ) : mode === 'dan' ? (
+        <DayView
+          key={`${plan.kcal}-${pantryKey}`}
+          plan={plan}
+          foods={foods}
+          atHome={atHome}
+          onGoToFoods={onGoToFoods}
+          onOpenMeal={(m, picks) => {
+            chooseMeal(m)
+            setPreset(picks)
+            onMode('obrok')
+          }}
+        />
       ) : (
         <MealBuilder
           key={`${plan.kcal}-${meal}-${pantryKey}-${seed}`}
+          meal={meal}
           targets={targets}
           foods={foods}
-          pantry={pantry}
+          atHome={atHome}
           variant={seed}
-          note={mealInfo.note}
+          preset={seed === 0 ? preset : undefined}
+          note={plan.notes?.[meal]}
           onReshuffle={() => setSeed((s) => s + 1)}
           onGoToFoods={onGoToFoods}
         />
@@ -63,20 +79,25 @@ export default function MealView({ plan, foods, pantry, onGoToFoods }: Props) {
 }
 
 interface BuilderProps {
+  meal: MealId
   targets: Units
   foods: Food[]
-  pantry: Set<string>
+  atHome: Food[]
   variant: number
+  preset?: Food[]
   note?: string
   onReshuffle: () => void
   onGoToFoods: () => void
 }
 
-function MealBuilder({ targets, foods, pantry, variant, note, onReshuffle, onGoToFoods }: BuilderProps) {
+function MealBuilder({ meal, targets, foods, atHome, variant, preset, note, onReshuffle, onGoToFoods }: BuilderProps) {
   const byId = useMemo(() => new Map(foods.map((f) => [f.id, f])), [foods])
-  const atHome = useMemo(() => foods.filter((f) => pantry.has(f.id)), [foods, pantry])
-  const { order, count } = useMemo(() => suggestionOrder(targets, atHome, variant), [targets, atHome, variant])
-  const [alloc, setAlloc] = useState<Allocation>(() => autoFill(targets, order))
+  const ctx = MEAL_CONTEXT[meal]
+  const options = useMemo(() => suggestions(ctx, targets, atHome), [ctx, targets, atHome])
+  const count = options.length
+  const picks = preset ?? (count > 0 ? options[variant % count] : [])
+  // Odabrane namirnice idu prve, pa ih autoFill uzima za svoju skupinu.
+  const [alloc, setAlloc] = useState<Allocation>(() => autoFill(targets, [...picks, ...atHome.filter((f) => !picks.includes(f))]))
   const [editing, setEditing] = useState(false)
 
   const actual = totals(alloc, byId)
@@ -93,45 +114,12 @@ function MealBuilder({ targets, foods, pantry, variant, note, onReshuffle, onGoT
     })
 
   const groups = MEAL_GROUP_ORDER.filter((g) => (targets[g] ?? 0) > 0 || (actual[g] ?? 0) > 0)
-  const freeVeg = atHome.filter((f) => f.free)
+  const freeVeg = freeVegFor(ctx, picks, atHome)
 
   if (!editing) {
-    const missing = status.filter((st) => st.diff < 0)
-    const items = MEAL_GROUP_ORDER.flatMap((g) =>
-      foods.filter((f) => f.group === g && !f.free && alloc[f.id] > 0),
-    )
     return (
       <>
-        <div className={`card suggestion ${allOk ? 'ok' : ''}`}>
-          <ul className="items">
-            {items.map((f) => (
-              <li key={f.id} style={{ '--c': GROUP_BY_ID[f.group].color } as CSSProperties}>
-                <span className="dot" aria-hidden />
-                <span className="item-name">{f.name}</span>
-                <span className="amount">{formatAmount(f, alloc[f.id])}</span>
-              </li>
-            ))}
-            {freeVeg.map((f) => (
-              <li key={f.id} className="free-item" style={{ '--c': GROUP_BY_ID.povrce.color } as CSSProperties}>
-                <span className="dot" aria-hidden />
-                <span className="item-name">{f.name} <small className="hint">po želji</small></span>
-                <span className="amount">do 100 g</span>
-              </li>
-            ))}
-          </ul>
-          {items.length === 0 && <p className="hint">Od namirnica koje imate kod kuće ne može se složiti ovaj obrok.</p>}
-          <p className="summary-text">
-            {allOk ? '✓ U skladu s planom' : 'Obrok nije potpun'} · ugljikohidrati <strong>{formatNumber(Math.round(carbs))} g</strong>
-          </p>
-          {missing.length > 0 && (
-            <p className="delta short">
-              Nedostaje:{' '}
-              {missing.map((st) => `${GROUP_BY_ID[st.group].short.toLowerCase()} ${formatNumber(-st.diff)} j.`).join(', ')}
-              {' '}– nemate ništa iz te skupine kod kuće.{' '}
-              <button className="link" onClick={onGoToFoods}>Označi namirnice</button>
-            </p>
-          )}
-        </div>
+        <SuggestionCard foods={foods} alloc={alloc} targets={targets} freeVeg={freeVeg} onGoToFoods={onGoToFoods} />
 
         {note && <p className="hint center">{note}</p>}
 
