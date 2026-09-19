@@ -209,3 +209,19 @@ details.card > summary > span:first-child { flex: 1; }
 .plan-table tbody th, .plan-table tfoot th { text-align: left; font-weight: 600; white-space: nowrap; }
 .plan-table th small { color: var(--muted); font-weight: 400; }
 .plan-table tfoot { font-weight: 700; }
+
+button.next {
+  display: block; width: 100%; margin: 16px 0; padding: 12px; border-radius: 12px; font-size: 1rem;
+}
+button.next.sticky {
+  position: sticky; bottom: calc(76px + env(safe-area-inset-bottom)); z-index: 4;
+  box-shadow: 0 4px 16px rgb(0 0 0 / 0.15);
+}
+
+.suggestion { --c: var(--accent); }
+.suggestion.ok { border-color: var(--ok); }
+.suggestion .items li { justify-content: flex-start; padding: 10px 0; }
+.suggestion .item-name { flex: 1; min-width: 0; }
+.suggestion .amount { font-size: 1.05rem; }
+.suggestion .free-item .amount { font-weight: 500; color: var(--muted); font-size: 0.9rem; }
+.dot { width: 10px; height: 10px; border-radius: 50%; background: var(--c); flex: 0 0 auto; }

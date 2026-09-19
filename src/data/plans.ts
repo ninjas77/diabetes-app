@@ -68,5 +68,3 @@ export const PLANS: Plan[] = [
     },
   },
 ]
-
-export const DEFAULT_KCAL = 1900

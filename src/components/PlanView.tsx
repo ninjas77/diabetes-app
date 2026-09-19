@@ -1,15 +1,16 @@
 import { GROUP_BY_ID, MEAL_GROUP_ORDER } from '../data/groups'
 import { MEALS, PLANS } from '../data/plans'
-import type { GroupId } from '../types'
+import type { GroupId, Plan } from '../types'
 
 interface Props {
-  kcal: number
+  kcal: number | null
   onChange: (kcal: number) => void
+  hasPantry: boolean
+  onNext: () => void
 }
 
-export default function PlanView({ kcal, onChange }: Props) {
-  const plan = PLANS.find((p) => p.kcal === kcal) ?? PLANS[0]
-  const daily = (g: GroupId) => MEALS.reduce((sum, m) => sum + (plan.meals[m.id][g] ?? 0), 0)
+export default function PlanView({ kcal, onChange, hasPantry, onNext }: Props) {
+  const plan = PLANS.find((p) => p.kcal === kcal)
 
   return (
     <section>
@@ -24,6 +25,27 @@ export default function PlanView({ kcal, onChange }: Props) {
         ))}
       </div>
 
+      {plan && (
+        <>
+          <button className="primary next" onClick={onNext}>
+            {hasPantry ? 'Složi obrok →' : 'Dalje: što imam kod kuće →'}
+          </button>
+          <PlanTable plan={plan} />
+        </>
+      )}
+      <p className="hint">
+        Izvor: KBC Sestre milosrdnice, Zavod za endokrinologiju, dijabetes i bolesti metabolizma „Mladen Sekso”,
+        Služba za dijetetiku i prehranu.
+      </p>
+    </section>
+  )
+}
+
+function PlanTable({ plan }: { plan: Plan }) {
+  const daily = (g: GroupId) => MEALS.reduce((sum, m) => sum + (plan.meals[m.id][g] ?? 0), 0)
+
+  return (
+    <>
       <h2>Jedinice po obroku</h2>
       <div className="table-wrap">
         <table className="plan-table">
@@ -51,10 +73,6 @@ export default function PlanView({ kcal, onChange }: Props) {
           </tfoot>
         </table>
       </div>
-      <p className="hint">
-        Izvor: KBC Sestre milosrdnice, Zavod za endokrinologiju, dijabetes i bolesti metabolizma „Mladen Sekso”,
-        Služba za dijetetiku i prehranu.
-      </p>
-    </section>
+    </>
   )
 }

@@ -2,8 +2,7 @@ import { useMemo, useState } from 'react'
 import type { CSSProperties } from 'react'
 import { GROUP_BY_ID, MEAL_GROUP_ORDER } from '../data/groups'
 import { MEALS } from '../data/plans'
-import { useStored } from '../lib/storage'
-import { autoFill, compare, formatAmount, formatNumber, roundHalf, totals } from '../lib/meal'
+import { autoFill, compare, formatAmount, formatNumber, roundHalf, suggestionOrder, totals } from '../lib/meal'
 import type { Allocation } from '../lib/meal'
 import type { Food, GroupId, MealId, Plan, Units } from '../types'
 
@@ -53,7 +52,7 @@ export default function MealView({ plan, foods, pantry, onGoToFoods }: Props) {
           targets={targets}
           foods={foods}
           pantry={pantry}
-          shuffle={seed > 0}
+          variant={seed}
           note={mealInfo.note}
           onReshuffle={() => setSeed((s) => s + 1)}
           onGoToFoods={onGoToFoods}
@@ -67,26 +66,18 @@ interface BuilderProps {
   targets: Units
   foods: Food[]
   pantry: Set<string>
-  shuffle: boolean
+  variant: number
   note?: string
   onReshuffle: () => void
   onGoToFoods: () => void
 }
 
-function shuffled<T>(list: T[]): T[] {
-  const a = [...list]
-  for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1))
-    ;[a[i], a[j]] = [a[j], a[i]]
-  }
-  return a
-}
-
-function MealBuilder({ targets, foods, pantry, shuffle, note, onReshuffle, onGoToFoods }: BuilderProps) {
+function MealBuilder({ targets, foods, pantry, variant, note, onReshuffle, onGoToFoods }: BuilderProps) {
   const byId = useMemo(() => new Map(foods.map((f) => [f.id, f])), [foods])
   const atHome = useMemo(() => foods.filter((f) => pantry.has(f.id)), [foods, pantry])
-  const [alloc, setAlloc] = useState<Allocation>(() => autoFill(targets, shuffle ? shuffled(atHome) : atHome))
-  const [showFree, setShowFree] = useStored('showFreeVeg', true)
+  const { order, count } = useMemo(() => suggestionOrder(targets, atHome, variant), [targets, atHome, variant])
+  const [alloc, setAlloc] = useState<Allocation>(() => autoFill(targets, order))
+  const [editing, setEditing] = useState(false)
 
   const actual = totals(alloc, byId)
   const status = compare(targets, actual)
@@ -104,13 +95,66 @@ function MealBuilder({ targets, foods, pantry, shuffle, note, onReshuffle, onGoT
   const groups = MEAL_GROUP_ORDER.filter((g) => (targets[g] ?? 0) > 0 || (actual[g] ?? 0) > 0)
   const freeVeg = atHome.filter((f) => f.free)
 
+  if (!editing) {
+    const missing = status.filter((st) => st.diff < 0)
+    const items = MEAL_GROUP_ORDER.flatMap((g) =>
+      foods.filter((f) => f.group === g && !f.free && alloc[f.id] > 0),
+    )
+    return (
+      <>
+        <div className={`card suggestion ${allOk ? 'ok' : ''}`}>
+          <ul className="items">
+            {items.map((f) => (
+              <li key={f.id} style={{ '--c': GROUP_BY_ID[f.group].color } as CSSProperties}>
+                <span className="dot" aria-hidden />
+                <span className="item-name">{f.name}</span>
+                <span className="amount">{formatAmount(f, alloc[f.id])}</span>
+              </li>
+            ))}
+            {freeVeg.map((f) => (
+              <li key={f.id} className="free-item" style={{ '--c': GROUP_BY_ID.povrce.color } as CSSProperties}>
+                <span className="dot" aria-hidden />
+                <span className="item-name">{f.name} <small className="hint">po želji</small></span>
+                <span className="amount">do 100 g</span>
+              </li>
+            ))}
+          </ul>
+          {items.length === 0 && <p className="hint">Od namirnica koje imate kod kuće ne može se složiti ovaj obrok.</p>}
+          <p className="summary-text">
+            {allOk ? '✓ U skladu s planom' : 'Obrok nije potpun'} · ugljikohidrati <strong>{formatNumber(Math.round(carbs))} g</strong>
+          </p>
+          {missing.length > 0 && (
+            <p className="delta short">
+              Nedostaje:{' '}
+              {missing.map((st) => `${GROUP_BY_ID[st.group].short.toLowerCase()} ${formatNumber(-st.diff)} j.`).join(', ')}
+              {' '}– nemate ništa iz te skupine kod kuće.{' '}
+              <button className="link" onClick={onGoToFoods}>Označi namirnice</button>
+            </p>
+          )}
+        </div>
+
+        {note && <p className="hint center">{note}</p>}
+
+        <div className="actions">
+          <button className="primary" onClick={onReshuffle} disabled={count <= 1}>🔀 Drugi prijedlog</button>
+          <button onClick={() => setEditing(true)}>✏️ Prilagodi</button>
+        </div>
+        <p className="hint center">
+          {count > 1
+            ? `Prijedlog ${(variant % count) + 1} od ${count}`
+            : 'Ovo je jedini obrok koji se može složiti od namirnica koje imate. Označite više namirnica za druge prijedloge.'}
+        </p>
+      </>
+    )
+  }
+
   return (
     <>
       <div className={`summary ${allOk ? 'ok' : ''}`}>
         <div className="status-row">
-          {status.map((s) => (
-            <span key={s.group} className={`pill ${s.diff === 0 ? 'ok' : s.diff < 0 ? 'short' : 'over'}`} style={{ '--c': GROUP_BY_ID[s.group].color } as CSSProperties}>
-              {GROUP_BY_ID[s.group].short} {formatNumber(s.actual)}/{formatNumber(s.target)}
+          {status.map((st) => (
+            <span key={st.group} className={`pill ${st.diff === 0 ? 'ok' : st.diff < 0 ? 'short' : 'over'}`} style={{ '--c': GROUP_BY_ID[st.group].color } as CSSProperties}>
+              {GROUP_BY_ID[st.group].short} {formatNumber(st.actual)}/{formatNumber(st.target)}
             </span>
           ))}
         </div>
@@ -134,29 +178,8 @@ function MealBuilder({ targets, foods, pantry, shuffle, note, onReshuffle, onGoT
         />
       ))}
 
-      {freeVeg.length > 0 && (
-        <div className="card free">
-          <div className="card-head">
-            <h3>Povrće po želji</h3>
-            <label className="toggle">
-              <input type="checkbox" checked={showFree} onChange={(e) => setShowFree(e.target.checked)} /> prikaži
-            </label>
-          </div>
-          <p className="hint">Ne računa se u dnevni unos – do 100 g, najviše u 3 obroka dnevno.</p>
-          {showFree && (
-            <ul className="items">
-              {freeVeg.map((f) => (
-                <li key={f.id}><span>{f.name}</span><span className="amount">do 100 g</span></li>
-              ))}
-            </ul>
-          )}
-        </div>
-      )}
-
-      {note && <p className="hint center">{note}</p>}
-
       <div className="actions">
-        <button onClick={onReshuffle}>🔀 Druga kombinacija</button>
+        <button className="primary" onClick={() => setEditing(false)}>✓ Gotovo</button>
       </div>
     </>
   )

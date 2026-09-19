@@ -15,13 +15,22 @@ interface Props {
   onDelete: (id: string) => void
   editing: Food | null
   setEditing: (food: Food | null) => void
+  onNext: () => void
+}
+
+/** Hrvatski oblik riječi uz broj: 1 namirnica, 2 namirnice, 5 namirnica. */
+function namirnica(n: number): string {
+  const d = n % 10, dd = n % 100
+  if (d === 1 && dd !== 11) return 'namirnica'
+  if (d >= 2 && d <= 4 && (dd < 12 || dd > 14)) return 'namirnice'
+  return 'namirnica'
 }
 
 type Filter = 'sve' | 'kod-kuce' | 'moje'
 
 const normalize = (s: string) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd')
 
-export default function FoodsView({ foods, pantry, onToggle, onClearPantry, onSave, onDelete, editing, setEditing }: Props) {
+export default function FoodsView({ foods, pantry, onToggle, onClearPantry, onSave, onDelete, editing, setEditing, onNext }: Props) {
   const [query, setQuery] = useState('')
   const [filter, setFilter] = useState<Filter>('sve')
   const [adding, setAdding] = useState(false)
@@ -120,6 +129,10 @@ export default function FoodsView({ foods, pantry, onToggle, onClearPantry, onSa
           <p key={x.title}><strong>{x.title}:</strong> {x.items}</p>
         ))}
       </details>
+
+      {pantry.size > 0 && (
+        <button className="primary next sticky" onClick={onNext}>Složi obrok ({pantry.size} {namirnica(pantry.size)}) →</button>
+      )}
 
       <details className="card info warn">
         <summary><strong>Ne preporučuje se</strong></summary>

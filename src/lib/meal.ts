@@ -81,3 +81,27 @@ export function formatAmount(food: Food, units: number): string {
   if (!food.altGrams) return main
   return `${main} (${formatNumber(Math.round(units * food.altGrams))} g ${food.altState ?? ''})`.trim()
 }
+
+/**
+ * n-ti različiti prijedlog: u svakoj skupini koju obrok treba odabire se jedna namirnica,
+ * a n prolazi kroz sve kombinacije (kao brojač gdje je svaka skupina jedna znamenka).
+ * Vraća namirnice poredane tako da autoFill uzme odabranu, i ukupan broj kombinacija.
+ */
+export function suggestionOrder(targets: Units, available: Food[], n: number): { order: Food[]; count: number } {
+  const counted = available.filter((f) => !f.free)
+  const lists = MEAL_GROUP_ORDER.map((g) => ({ g, list: counted.filter((f) => f.group === g) }))
+  const varying = lists.filter(({ g, list }) => (targets[g] ?? 0) > 0 && list.length > 1)
+  const count = varying.reduce((c, { list }) => c * list.length, 1)
+
+  let k = ((n % count) + count) % count
+  const pick = new Map<GroupId, number>()
+  for (const { g, list } of varying) {
+    pick.set(g, k % list.length)
+    k = Math.floor(k / list.length)
+  }
+  const order = lists.flatMap(({ g, list }) => {
+    const i = pick.get(g) ?? 0
+    return [...list.slice(i), ...list.slice(0, i)]
+  })
+  return { order, count }
+}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { autoFill, compare, formatAmount, totals } from './meal'
+import { autoFill, compare, formatAmount, suggestionOrder, totals } from './meal'
 import { BUILTIN_FOODS } from '../data/foods'
 import { PLANS } from '../data/plans'
 import type { Food, GroupId } from '../types'
@@ -71,5 +71,29 @@ describe('autoFill', () => {
 
   it('shows eggs in pieces', () => {
     expect(formatAmount(food('meso-jaje') as Food, 2)).toBe('2 kom')
+  })
+})
+
+describe('suggestionOrder', () => {
+  const targets = { meso: 2, kruh: 2, voce: 1 }
+  const home = ['meso-piletina-bez-koze', 'meso-jaje', 'kruh-kruh-razeni', 'kruh-riza-bijela-ili-integralna', 'kruh-heljda', 'voce-jabuka'].map(food)
+
+  it('walks through every distinct combination, then wraps around', () => {
+    const { count } = suggestionOrder(targets, home, 0)
+    expect(count).toBe(6)
+    const seen = new Set<string>()
+    for (let n = 0; n < count; n++) {
+      seen.add(JSON.stringify(autoFill(targets, suggestionOrder(targets, home, n).order)))
+    }
+    expect(seen.size).toBe(6)
+    expect(autoFill(targets, suggestionOrder(targets, home, 6).order)).toEqual(autoFill(targets, suggestionOrder(targets, home, 0).order))
+  })
+
+  it('reports a single combination when each group has one food', () => {
+    expect(suggestionOrder(targets, [food('meso-jaje'), food('kruh-kruh-razeni'), food('voce-jabuka')], 3).count).toBe(1)
+  })
+
+  it('ignores groups the meal does not need', () => {
+    expect(suggestionOrder({ voce: 1 }, home, 0).count).toBe(1)
   })
 })

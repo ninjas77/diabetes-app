@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { BUILTIN_FOODS } from './data/foods'
-import { DEFAULT_KCAL, PLANS } from './data/plans'
+import { PLANS } from './data/plans'
 import { useStored } from './lib/storage'
 import type { Food } from './types'
 import MealView from './components/MealView'
@@ -10,20 +10,21 @@ import PlanView from './components/PlanView'
 type Tab = 'obrok' | 'namirnice' | 'plan'
 
 const TABS: { id: Tab; label: string; icon: string }[] = [
-  { id: 'obrok', label: 'Obrok', icon: '🍽️' },
-  { id: 'namirnice', label: 'Namirnice', icon: '🧺' },
-  { id: 'plan', label: 'Plan', icon: '📋' },
+  { id: 'plan', label: '1. Plan', icon: '📋' },
+  { id: 'namirnice', label: '2. Kod kuće', icon: '🧺' },
+  { id: 'obrok', label: '3. Obrok', icon: '🍽️' },
 ]
 
 export default function App() {
-  const [tab, setTab] = useStored<Tab>('tab', 'obrok')
-  const [kcal, setKcal] = useStored<number>('kcal', DEFAULT_KCAL)
+  // Bez odabranog plana aplikacija kreće od prvog koraka.
+  const [kcal, setKcal] = useStored<number | null>('kcal', null)
+  const [tab, setTab] = useStored<Tab>('tab', 'plan')
   const [customFoods, setCustomFoods] = useStored<Food[]>('customFoods', [])
   const [pantry, setPantry] = useStored<string[]>('pantry', [])
   const [welcomeSeen, setWelcomeSeen] = useStored('welcomeSeen', false)
   const [editing, setEditing] = useState<Food | null>(null)
 
-  const plan = PLANS.find((p) => p.kcal === kcal) ?? PLANS[0]
+  const plan = PLANS.find((p) => p.kcal === kcal) ?? null
   const foods = useMemo(() => [...BUILTIN_FOODS, ...customFoods], [customFoods])
   const pantrySet = useMemo(() => new Set(pantry), [pantry])
 
@@ -45,7 +46,7 @@ export default function App() {
       <header className="topbar">
         <h1>Dijabetički obrok</h1>
         <button className="plan-chip" onClick={() => setTab('plan')}>
-          {plan.kcal} kcal
+          {plan ? `${plan.kcal} kcal` : 'Odaberi plan'}
         </button>
       </header>
 
@@ -60,9 +61,15 @@ export default function App() {
           </div>
         )}
 
-        {tab === 'obrok' && (
-          <MealView plan={plan} foods={foods} pantry={pantrySet} onGoToFoods={() => setTab('namirnice')} />
-        )}
+        {tab === 'obrok' &&
+          (plan ? (
+            <MealView plan={plan} foods={foods} pantry={pantrySet} onGoToFoods={() => setTab('namirnice')} />
+          ) : (
+            <div className="empty">
+              <p>Prvo odaberite svoj dnevni plan prehrane.</p>
+              <button className="primary" onClick={() => setTab('plan')}>Odaberi plan</button>
+            </div>
+          ))}
         {tab === 'namirnice' && (
           <FoodsView
             foods={foods}
@@ -73,9 +80,12 @@ export default function App() {
             onDelete={deleteFood}
             editing={editing}
             setEditing={setEditing}
+            onNext={() => setTab('obrok')}
           />
         )}
-        {tab === 'plan' && <PlanView kcal={kcal} onChange={setKcal} />}
+        {tab === 'plan' && (
+          <PlanView kcal={kcal} onChange={setKcal} hasPantry={pantry.length > 0} onNext={() => setTab(pantry.length > 0 ? 'obrok' : 'namirnice')} />
+        )}
       </main>
 
       <nav className="tabbar">
